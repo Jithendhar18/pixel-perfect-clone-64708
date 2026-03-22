@@ -3,6 +3,8 @@ import type {
   IngestResponse,
   IngestionStatusResponse,
   DocumentResponse,
+  BookSummary,
+  BookHierarchy,
 } from "@/types";
 
 export const ingestionApi = {
@@ -27,11 +29,23 @@ export const ingestionApi = {
   getDocuments: (
     page: number = 1,
     pageSize: number = 20,
-    status?: string
+    status?: string,
+    bookId?: number
   ) =>
     api
       .get<DocumentResponse[]>("/ingestion/documents", {
-        params: { page, page_size: pageSize, ...(status ? { status } : {}) },
+        params: {
+          page,
+          page_size: pageSize,
+          ...(status ? { status } : {}),
+          ...(bookId !== undefined ? { book_id: bookId } : {}),
+        },
       })
       .then((r) => r.data),
+
+  getBooks: () =>
+    api.get<BookSummary[]>("/ingestion/books").then((r) => r.data),
+
+  getBook: (bookId: number) =>
+    api.get<BookHierarchy>(`/ingestion/books/${bookId}`).then((r) => r.data),
 };

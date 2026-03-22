@@ -44,6 +44,7 @@ export interface SourceDocument {
   document_title: string;
   content: string;
   score: number;
+  source_url?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -82,8 +83,48 @@ export interface DocumentResponse {
   title: string;
   status: string;
   chunk_count: number;
+  book_id: number | null;
+  book_name: string | null;
+  chapter_id: number | null;
+  chapter_name: string | null;
   ingested_at: string | null;
   created_at: string;
+}
+
+export interface BookSummary {
+  book_id: number;
+  book_name: string;
+  page_count: number;
+  chunk_count: number;
+}
+
+export interface PageInChapter {
+  id: string;
+  bookstack_id: number;
+  title: string;
+  slug: string;
+  chapter_id: number | null;
+  chapter_name: string | null;
+  status: string;
+  chunk_count: number;
+  source_url: string;
+  ingested_at: string | null;
+  created_at: string;
+}
+
+export interface ChapterHierarchy {
+  chapter_id: number | null;
+  chapter_name: string | null;
+  page_count: number;
+  pages: PageInChapter[];
+}
+
+export interface BookHierarchy {
+  book_id: number;
+  book_name: string;
+  total_pages: number;
+  total_chunks: number;
+  chapters: ChapterHierarchy[];
 }
 
 export interface SystemMetrics {
@@ -92,7 +133,9 @@ export interface SystemMetrics {
   total_embeddings: number;
   total_users: number;
   total_queries: number;
+  total_books: number;
   documents_by_status: Record<string, number>;
+  documents_by_book: Record<string, number>;
   avg_query_latency_ms: number | null;
 }
 
