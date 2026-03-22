@@ -223,9 +223,20 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
                         prev ? { ...prev, statusLabel: NODE_LABELS[parsed.node] } : prev
                       );
                     }
+                    // Extract answer from llm_reasoning as fallback
+                    if (parsed.node === "llm_reasoning" && parsed.answer && !answer) {
+                      answer = parsed.answer;
+                      sources = parsed.sources ?? [];
+                    }
                     if (parsed.node === "response" && parsed.answer) {
                       answer = parsed.answer;
                       sources = parsed.sources ?? [];
+                      sessionIdFromBackend = parsed.session_id;
+                      latency_ms = parsed.latency_ms ?? Date.now() - startTime;
+                      success = true;
+                    }
+                    // Handle response node even if answer is empty (fallback)
+                    if (parsed.node === "response" && !answer) {
                       sessionIdFromBackend = parsed.session_id;
                       latency_ms = parsed.latency_ms ?? Date.now() - startTime;
                       success = true;
