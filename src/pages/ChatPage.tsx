@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, memo } from "react";
+import { useState, useRef, useEffect, useCallback, memo, useMemo } from "react";
 import type { ChatSession } from "@/types";
 import { useParams, useNavigate } from "react-router-dom";
 import { useChat } from "@/contexts/ChatContext";
@@ -22,6 +22,9 @@ import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import type { Message, SourceDocument } from "@/types";
+import VoiceInput from "@/components/VoiceInput";
+import AvatarPanel from "@/components/AvatarPanel";
+import { stopSpeaking } from "@/services/avatarService";
 
 // Source panel
 function SourcePanel({ sources }: { sources: SourceDocument[] }) {
@@ -323,10 +326,12 @@ function ChatInput({
   onSend,
   onCancel,
   isLoading,
+  onVoiceListening,
 }: {
   onSend: (q: string) => void;
   onCancel: () => void;
   isLoading: boolean;
+  onVoiceListening?: (listening: boolean) => void;
 }) {
   const [value, setValue] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -357,32 +362,45 @@ function ChatInput({
     el.style.height = Math.min(el.scrollHeight, 160) + "px";
   };
 
+  const handleVoiceTranscript = useCallback((text: string) => {
+    // Interrupt AI speech when user starts talking
+    stopSpeaking();
+    onSend(text);
+  }, [onSend]);
+
   return (
     <div className="sticky bottom-0 bg-background pb-4 safe-bottom pt-2 px-4">
-      <div className="relative max-w-3xl mx-auto">
-        <textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={handleKeyDown}
-          onInput={handleInput}
-          placeholder="Ask anything about your documentation..."
-          rows={1}
-          className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
-          aria-label="Chat message input"
+      <div className="relative max-w-3xl mx-auto flex items-end gap-2">
+        <div className="relative flex-1">
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onInput={handleInput}
+            placeholder="Ask anything about your documentation..."
+            rows={1}
+            className="w-full resize-none rounded-2xl border border-border bg-card px-4 py-3 pr-12 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 transition-shadow"
+            aria-label="Chat message input"
+          />
+          <button
+            onClick={isLoading ? onCancel : handleSubmit}
+            disabled={!isLoading && !value.trim()}
+            className={`absolute right-3 bottom-3 h-8 w-8 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-40 ${
+              isLoading
+                ? "bg-destructive text-destructive-foreground"
+                : "bg-primary text-primary-foreground"
+            }`}
+            aria-label={isLoading ? "Stop generating" : "Send message"}
+          >
+            {isLoading ? <Square className="h-3.5 w-3.5" /> : <ArrowUp className="h-4 w-4" />}
+          </button>
+        </div>
+        <VoiceInput
+          onTranscriptReady={handleVoiceTranscript}
+          onListeningChange={onVoiceListening}
+          disabled={isLoading}
         />
-        <button
-          onClick={isLoading ? onCancel : handleSubmit}
-          disabled={!isLoading && !value.trim()}
-          className={`absolute right-3 bottom-3 h-8 w-8 rounded-full flex items-center justify-center transition-all duration-200 active:scale-95 disabled:opacity-40 ${
-            isLoading
-              ? "bg-destructive text-destructive-foreground"
-              : "bg-primary text-primary-foreground"
-          }`}
-          aria-label={isLoading ? "Stop generating" : "Send message"}
-        >
-          {isLoading ? <Square className="h-3.5 w-3.5" /> : <ArrowUp className="h-4 w-4" />}
-        </button>
       </div>
     </div>
   );
@@ -409,6 +427,18 @@ export default function ChatPage() {
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [mobileSessionsOpen, setMobileSessionsOpen] = useState(false);
+  const [isVoiceListening, setIsVoiceListening] = useState(false);
+
+  // Get the last assistant message for TTS
+  const lastAssistantMessage = useMemo(() => {
+    const msgs = activeSession?.messages ?? [];
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === "assistant" && msgs[i].status === "done") {
+        return msgs[i].content;
+      }
+    }
+    return undefined;
+  }, [activeSession?.messages]);
 
   // Sync URL to state
   useEffect(() => {
@@ -461,6 +491,13 @@ export default function ChatPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, [createNewSession, navigate]);
+
+  // Interrupt avatar speech when user starts voice input
+  useEffect(() => {
+    if (isVoiceListening) {
+      stopSpeaking();
+    }
+  }, [isVoiceListening]);
 
   const messages = activeSession?.messages ?? [];
   const isEmpty = messages.length === 0 && !streamingMessage;
@@ -522,7 +559,21 @@ export default function ChatPage() {
           </div>
         )}
 
-        <ChatInput onSend={sendMessage} onCancel={cancelRequest} isLoading={isLoading} />
+        <ChatInput
+          onSend={sendMessage}
+          onCancel={cancelRequest}
+          isLoading={isLoading}
+          onVoiceListening={setIsVoiceListening}
+        />
+      </div>
+
+      {/* Avatar side panel — desktop only */}
+      <div className="hidden lg:flex">
+        <AvatarPanel
+          lastAssistantMessage={lastAssistantMessage}
+          isProcessing={isLoading}
+          onInterrupt={cancelRequest}
+        />
       </div>
     </div>
   );
